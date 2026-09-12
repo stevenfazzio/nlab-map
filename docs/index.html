@@ -64,9 +64,9 @@
   // Offline mode disabled
   const OFFLINE_MODE = false;
 </script>
+<script src="https://unpkg.com/d3@latest/dist/d3.min.js"></script>
 <script src="https://unpkg.com/apache-arrow@latest/Arrow.es2015.min.js"></script>
 <script src="https://unpkg.com/deck.gl@9.1/dist.min.js"></script>
-<script src="https://unpkg.com/d3@latest/dist/d3.min.js"></script>
 
 <style>
   .content-wrapper{top:0;left:0;width:100%;height:100%;z-index:1;padding:0;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;min-height:calc(100vh - 16px);pointer-events:none}.stack{display:flex;flex-direction:column;gap:0;padding:0;pointer-events:none;max-height:50vh;overflow-y:visible}.top-left{grid-column:1;grid-row:1;justify-self:start;align-self:start;align-items:start}.bottom-left{grid-column:1;grid-row:2;justify-self:start;align-self:end;align-items:start;display:flex;flex-direction:column-reverse;transform:scaleY(-1);z-index:2}.top-right{grid-column:2;grid-row:1;justify-self:end;justify-items:end;align-self:start;align-items:end}.bottom-right{grid-column:2;grid-row:2;justify-self:end;justify-items:end;align-self:end;align-items:end;display:flex;flex-direction:column-reverse;transform:scaleY(-1)}.stack.bottom-left .stack-box{transform:scaleY(-1)}.stack.bottom-right .stack-box{transform:scaleY(-1)}#loading{width:100%;height:100%;top:0px;left:0px;position:absolute;display:block;z-index:99}#loading-image{position:absolute;top:45%;left:47.5%;z-index:100}#title-container{top:0;left:0}@media screen and (max-width:1200px){.content-wrapper{grid-template-columns:1fr;grid-template-rows:auto 1fr}.top-left{grid-column:1;grid-row:1}.top-right{grid-column:1;grid-row:1;justify-self:end}.bottom-left{grid-column:1;grid-row:2}.bottom-right{grid-column:1;grid-row:2;justify-self:end}.stack{max-height:40vh}}@media screen and (max-width:768px){.content-wrapper{grid-template-columns:1fr;grid-template-rows:auto 1fr}.top-right,.bottom-left,.bottom-right{display:none}.top-left{max-height:30vh;overflow-y:auto}.container-box{margin:4px 8px;padding:8px;font-size:0.9em}}@media screen and (max-width:480px){.container-box{margin:2px 4px;padding:6px;font-size:0.85em;border-radius:12px}.stack{max-height:25vh}}
@@ -232,6 +232,20 @@
 </div>
 
 
+ 
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [["$", "$"], ["\\(", "\\)"]],
+    displayMath: [["$$", "$$"], ["\\[", "\\]"]],
+    packages: {"[+]": ["mathtools", "noerrors", "noundefined"]},
+    macros: {array: ["\\begin{array}{*{20}{c}}#1\\end{array}", 1]},  // itex \array{..} is not LaTeX
+  },
+  loader: {load: ["[tex]/mathtools", "[tex]/noerrors", "[tex]/noundefined"]},
+  startup: {typeset: false},
+};
+</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-chtml.js"></script>
 
 <div id="progress-container" class="datamapplot-progress-container container-box" style="width: 500px; position: absolute;">
   <div id="point-data-progress" class="datamapplot-progress-bar">
@@ -925,6 +939,30 @@ function loadMetaData() {
     loadLabelDataLayer();
     loadMetaData();
     
+(function () {
+  let lastRaw = null, lastRendered = null, busy = false, queued = null;
+  const needs = (el) => el.textContent.includes("$") && !el.querySelector("mjx-container");
+  const render = (el) => {
+    if (!window.MathJax || !MathJax.typesetPromise || !needs(el)) return;
+    const raw = el.innerHTML;
+    if (raw === lastRaw && lastRendered) { el.innerHTML = lastRendered; return; }
+    if (busy) { queued = el; return; }
+    busy = true; lastRaw = raw; lastRendered = null;
+    MathJax.typesetPromise([el]).catch(() => {}).then(() => {
+      busy = false;
+      if (!needs(el) && el.innerHTML !== lastRaw) lastRendered = el.innerHTML;
+      if (queued) { const q = queued; queued = null; render(q); }
+    });
+  };
+  new MutationObserver((muts) => {
+    for (const m of muts) {
+      const t = m.target.nodeType === 1 ? m.target : m.target.parentElement;
+      const el = t && t.closest && t.closest(".deck-tooltip");
+      if (el) { render(el); return; }
+    }
+  }).observe(document.body, {childList: true, subtree: true});
+})();
+
 
   </script>
 </html>

@@ -153,20 +153,39 @@ def truncate_words(text, cap):
 
 
 def first_sentences(text, cap):
-    """Leading sentences of a cleaned text, up to about `cap` words, never cutting inside $...$."""
-    out = []
-    n = 0
-    for sent in re.split(r"(?<=[.!?])\s+(?=[A-Z(\[$])", text.replace("\n", " ")):
-        if n and n + len(sent.split()) > cap:
+    """Leading sentences of a cleaned text, up to about `cap` words, safe for MathJax.
+
+    Sentence breaks are only taken in prose, never inside $...$ or $$...$$; a math span that would
+    cross the cap is dropped whole, so the summary never ends with an unbalanced delimiter."""
+    parts = MATH_SPAN_RE.split(text.replace("\n", " "))  # odd indices are math spans
+    out, n = [], 0
+    for i, part in enumerate(parts):
+        if i % 2:  # math span: all or nothing
+            words = len(part.split())
+            if n + words > cap + 20:
+                break
+            out.append(part)
+            n += words
+            continue
+        sentences = re.split(r"(?<=[.!?])\s+(?=[A-Z(\[])", part)
+        stopped = False
+        for j, sent in enumerate(sentences):
+            if n == 0 and len(sent.split()) > 2 * cap:  # punctuation-free lead: prose only here, safe to cut
+                sent = " ".join(sent.split()[:cap]) + " …"
+            words = len(sent.split())
+            if n and n + words > cap:
+                stopped = True
+                break
+            out.append(sent if j == 0 else " " + sent)
+            n += words
+        if stopped or n >= cap:
             break
-        out.append(sent)
-        n += len(sent.split())
-        if n >= cap:
-            break
-    s = " ".join(out)
-    if s.count("$") % 2:  # unbalanced inline math from a hard cut: drop the tail
-        s = s[: s.rfind("$")].rstrip()
-    return truncate_words(s, cap + 20)
+    summary = "".join(out).strip()
+    if summary.count("$$") % 2:  # a stray delimiter from the source itself
+        summary = summary[: summary.rfind("$$")].rstrip()
+    if summary.replace("$$", "").count("$") % 2:
+        summary = summary[: summary.rfind("$")].rstrip()
+    return summary
 
 
 def page_url(name):

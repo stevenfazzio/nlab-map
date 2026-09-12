@@ -5,7 +5,7 @@ Writes docs/index.html and docs/data/nlab_*.zip (point/label/meta data, external
        itself stays small enough for link previews and phones)
 
 Surfaces:
-  hovercard   name, summary, primary Context, page structure, in-degree, last revised
+  hovercard   name, summary (math typeset by MathJax), primary Context, page structure, in-degree, last revised
   search      name + redirect names + summary + all Context headings
   click       opens the page on ncatlab.org
   size        log in-degree (how often other pages link here)
@@ -41,6 +41,51 @@ HOVER_TEMPLATE = """
     {context_primary} &middot; {structure} &middot; {in_degree} inbound links &middot; revised {revised}
   </div>
 </div>
+"""
+
+
+MATHJAX_HTML = """
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [["$", "$"], ["\\\\(", "\\\\)"]],
+    displayMath: [["$$", "$$"], ["\\\\[", "\\\\]"]],
+    packages: {"[+]": ["mathtools", "noerrors", "noundefined"]},
+    macros: {array: ["\\\\begin{array}{*{20}{c}}#1\\\\end{array}", 1]},  // itex \\array{..} is not LaTeX
+  },
+  loader: {load: ["[tex]/mathtools", "[tex]/noerrors", "[tex]/noundefined"]},
+  startup: {typeset: false},
+};
+</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-chtml.js"></script>
+"""
+
+# deck.gl re-sets the tooltip's innerHTML on every pointer move, so: typeset once per distinct content,
+# cache the rendered HTML, and swap it back in on repeats (inside the observer callback, before paint).
+MATHJAX_JS = """
+(function () {
+  let lastRaw = null, lastRendered = null, busy = false, queued = null;
+  const needs = (el) => el.textContent.includes("$") && !el.querySelector("mjx-container");
+  const render = (el) => {
+    if (!window.MathJax || !MathJax.typesetPromise || !needs(el)) return;
+    const raw = el.innerHTML;
+    if (raw === lastRaw && lastRendered) { el.innerHTML = lastRendered; return; }
+    if (busy) { queued = el; return; }
+    busy = true; lastRaw = raw; lastRendered = null;
+    MathJax.typesetPromise([el]).catch(() => {}).then(() => {
+      busy = false;
+      if (!needs(el) && el.innerHTML !== lastRaw) lastRendered = el.innerHTML;
+      if (queued) { const q = queued; queued = null; render(q); }
+    });
+  };
+  new MutationObserver((muts) => {
+    for (const m of muts) {
+      const t = m.target.nodeType === 1 ? m.target : m.target.parentElement;
+      const el = t && t.closest && t.closest(".deck-tooltip");
+      if (el) { render(el); return; }
+    }
+  }).observe(document.body, {childList: true, subtree: true});
+})();
 """
 
 
@@ -149,6 +194,8 @@ def main():
         offline_data_path=str(DATA_PREFIX),
         initial_zoom_fraction=0.95,
         minify_deps=True,
+        custom_html=MATHJAX_HTML,
+        custom_js=MATHJAX_JS,
     )
     html = fig._html_str if hasattr(fig, "_html_str") else str(fig)
     og = "\n".join(
