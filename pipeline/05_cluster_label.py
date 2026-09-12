@@ -75,6 +75,11 @@ def main():
     ap.add_argument("--next-cluster-size-quantile", type=float, default=0.85)
     ap.add_argument("--model", default="claude-haiku-4-5-20251001")
     ap.add_argument("--text-embedder", default="all-MiniLM-L6-v2")
+    # Toponymy spreads the layers over [lowest, highest] and maps each value to a name-length instruction
+    # (0 = "domain expert level, 8-15 words" ... 1 = "simple, 1-2 words"). 0.2-0.8 asks for 6-12 words at the
+    # finest layer down to 1-4 at the coarsest, avoiding both extremes.
+    ap.add_argument("--lowest-detail-level", type=float, default=0.2)
+    ap.add_argument("--highest-detail-level", type=float, default=0.8)
     ap.add_argument("--async", dest="use_async", action="store_true", help="concurrent naming calls (broken in 0.5.4)")
     args = ap.parse_args()
 
@@ -101,6 +106,8 @@ def main():
         clusterer=clusterer,  # pre-fitted: Toponymy reuses its layers rather than re-clustering
         object_description=OBJECT_DESCRIPTION,
         corpus_description=CORPUS_DESCRIPTION,
+        lowest_detail_level=args.lowest_detail_level,
+        highest_detail_level=args.highest_detail_level,
         verbose=True,
     )
     topics.fit(objects, embedding_vectors=emb, clusterable_vectors=xy)  # high-d first here
