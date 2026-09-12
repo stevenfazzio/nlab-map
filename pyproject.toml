@@ -1,0 +1,34 @@
+[project]
+name = "nlab-map"
+version = "0.1.0"
+description = "Interactive datamap of the nLab wiki: fetch the content mirror, embed pages, reduce to 2-d, name regions, render"
+requires-python = ">=3.12"
+dependencies = [
+    "pandas>=2.0",
+    "pyarrow>=14.0",
+    "numpy>=1.26",
+    "umap-learn>=0.5.10",
+    "toponymy>=0.4",
+    "datamapplot>=0.7",
+    "glasbey>=0.2",
+    "anthropic>=0.40",
+    "tqdm>=4.60",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+# Only needed on the GPU pod that runs pipeline/03_embed.py.
+embed = [
+    "sentence-transformers>=3.0",
+    "torch>=2.3",
+]
+dev = [
+    "ruff>=0.14",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
