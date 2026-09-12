@@ -124,18 +124,45 @@ def _clean_prose(t):
     return t
 
 
-def clean(md):
-    """Markdown+itex -> plain-ish text. Math stays as LaTeX; wiki links and markup become their text."""
+PROSE_ENV_RE = re.compile(
+    r"\\(?:begin|end)\{(?:theorem|definition|defn|lemma|proposition|prop|corollary|remark|rmk|example|ex|proof|"
+    r"note|conjecture|notation|terminology|question|exercise|axiom|principle|scope|center|centre)\*?\}"
+)
+DIAGRAM_ENV_RE = re.compile(r"\\begin\{(tikzcd|tikzpicture|imagefromfile)\}.*?\\end\{\1\}", re.S)
+DIAGRAM_PLACEHOLDER = " [diagram] "
+
+
+def clean(md, strip_math_envs=True):
+    """Markdown+itex -> plain-ish text. Math stays as LaTeX; wiki links and markup become their text.
+
+    strip_math_envs=True is the legacy behaviour the embeddings were computed with: every \\begin/\\end pair
+    is removed, which also destroys `aligned`/`array` inside $$...$$. Keep it for embed_text so the stored
+    text stays byte-identical to what was embedded. The summary uses strip_math_envs=False, which removes
+    only the wiki's prose environments (theorem, proof, ...) outside math and leaves math environments intact
+    for MathJax; TikZ diagrams, which MathJax cannot render, become a placeholder. Drop the flag at the next
+    full re-embed so both paths agree."""
     t = re.sub(r"<svg\b.*?</svg>", " ", md, flags=re.S | re.I)
     t = re.sub(r"<!--.*?-->", " ", t, flags=re.S)
     t = re.sub(r"\(\s*(?:\.\.\.|…)\s*\)|^\s*(?:\.\.\.|…)\s*$", " ", t, flags=re.M)  # "(...)" = section not yet written
     t = re.sub(r"^\s*(?:\+--|=--).*$", "", t, flags=re.M)  # nLab's +-- {: .num_defn} ... =-- block markers
-    t = re.sub(r"\\(begin|end)\{[^}]*\}", " ", t)  # theorem/proof environments: keep the content
+    if strip_math_envs:
+        t = re.sub(r"\\(begin|end)\{[^}]*\}", " ", t)  # legacy: keeps env content, loses aligned/array in math
     t = re.sub(r"^\s*\\(?:sub)*section\{([^}]*)\}.*$", r"\1", t, flags=re.M)  # \section{X} -> X
     t = re.sub(r"^\s*#{1,6}\s*", "", t, flags=re.M)  # nested markdown heading markers -> text
     t = re.sub(r"\{[:#][^}]*\}", " ", t)  # {: .class} and {#anchor} attribute lists
     parts = MATH_SPAN_RE.split(t)
-    t = "".join(part if i % 2 else _clean_prose(part) for i, part in enumerate(parts))
+    out = []
+    for i, part in enumerate(parts):
+        if i % 2:  # math span
+            if not strip_math_envs and DIAGRAM_ENV_RE.search(part):
+                part = DIAGRAM_PLACEHOLDER
+            out.append(part)
+        else:
+            if not strip_math_envs:
+                part = DIAGRAM_ENV_RE.sub(DIAGRAM_PLACEHOLDER, part)
+                part = PROSE_ENV_RE.sub(" ", part)
+            out.append(_clean_prose(part))
+    t = "".join(out)
     t = re.sub(r"[ \t]+", " ", t)
     t = re.sub(r"\n{2,}", "\n", t)
     return t.strip()
@@ -298,7 +325,7 @@ def main():
                 page_type=ptype,
                 tier=tier,
                 embed_text=embed_text,
-                summary=first_sentences(clean(strip_heading_lines(raw_lead)), SUMMARY_WORD_CAP),
+                summary=first_sentences(clean(strip_heading_lines(raw_lead), strip_math_envs=False), SUMMARY_WORD_CAP),
                 context_primary=contexts[0] if contexts else "None",
                 context_all=";".join(contexts),
                 category_tags=cats,
