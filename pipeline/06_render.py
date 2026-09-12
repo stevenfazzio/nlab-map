@@ -23,7 +23,7 @@ from datamapplot import create_interactive_plot
 
 DOCS = DATA.parent / "docs"
 OUT_HTML = DOCS / "index.html"
-DATA_PREFIX = DOCS / "data" / "nlab"
+DATA_PREFIX = DOCS / "nlab"  # beside index.html: the page fetches the zips by basename
 SITE_URL = "https://stevenfazzio.github.io/nlab-map/"
 N_CONTEXTS = 20
 TIER_LABELS = {

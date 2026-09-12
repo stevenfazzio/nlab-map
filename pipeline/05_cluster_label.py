@@ -41,7 +41,7 @@ def load_inputs():
     coords = pd.read_parquet(DATA / "coords.parquet")
     assert (pids == corpus.pid.to_numpy()).all(), "embeddings not aligned with corpus"
     assert (coords.pid.to_numpy() == corpus.pid.to_numpy()).all(), "coords not aligned with corpus"
-    xy = coords[["x", "y"]].to_numpy(dtype=np.float32)
+    xy = np.ascontiguousarray(coords[["x", "y"]].to_numpy(dtype=np.float32))  # numba kd-tree needs C order
     objects = [f"{n}: {s}" if s else n for n, s in zip(corpus.name, corpus.summary)]
     return corpus, emb, xy, objects
 
@@ -75,6 +75,7 @@ def main():
     ap.add_argument("--next-cluster-size-quantile", type=float, default=0.85)
     ap.add_argument("--model", default="claude-haiku-4-5-20251001")
     ap.add_argument("--text-embedder", default="all-MiniLM-L6-v2")
+    ap.add_argument("--async", dest="use_async", action="store_true", help="concurrent naming calls (broken in 0.5.4)")
     args = ap.parse_args()
 
     corpus, emb, xy, objects = load_inputs()
@@ -84,11 +85,15 @@ def main():
         return
     assert os.environ.get("ANTHROPIC_API_KEY"), "ANTHROPIC_API_KEY is not set"
 
+    import toponymy.llm_wrappers as llm_wrappers
     from sentence_transformers import SentenceTransformer
     from toponymy import Toponymy
-    from toponymy.llm_wrappers import AnthropicNamer
 
-    namer = AnthropicNamer(model=args.model)
+    # AsyncAnthropicNamer (toponymy 0.5.4) fails with "Semaphore is bound to a different event loop" once
+    # the second layer starts, so calls run sequentially unless --async is passed.
+    factory = llm_wrappers.AsyncAnthropicNamer if args.use_async else llm_wrappers.AnthropicNamer
+    namer = factory(model=args.model)
+    print(f"namer: {factory.__name__}({args.model})", flush=True)
     text_embedder = SentenceTransformer(args.text_embedder)
     topics = Toponymy(
         llm_wrapper=namer,
