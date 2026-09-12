@@ -83,7 +83,8 @@ def main():
         assert emb.shape[0] == len(batch) and np.isfinite(emb).all(), f"bad chunk at {start}"
         part = PARTS / f"part_{start:06d}.npy"
         tmp = part.with_suffix(".npy.tmp")
-        np.save(tmp, emb)
+        with open(tmp, "wb") as fh:  # file handle: np.save would append .npy to a bare path
+            np.save(fh, emb)
         os.replace(tmp, part)
         elapsed = time.time() - t0
         done_n = start + len(batch)
@@ -97,7 +98,8 @@ def main():
     assert emb.shape[0] == n, f"assembled {emb.shape[0]} rows for {n} texts"
     for out, arr in ((OUT, emb), (OUT_PIDS, pids)):
         tmp = out.with_suffix(".npy.tmp")
-        np.save(tmp, arr)
+        with open(tmp, "wb") as fh:
+            np.save(fh, arr)
         os.replace(tmp, out)
     meta = {"model": args.model, "dim": int(emb.shape[1]), "n": n, "max_length": args.max_length, "normalized": True}
     OUT_META.write_text(json.dumps(meta, indent=2) + "\n")
