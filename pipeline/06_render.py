@@ -24,7 +24,7 @@ from datamapplot import create_interactive_plot
 DOCS = DATA.parent / "docs"
 OUT_HTML = DOCS / "index.html"
 DATA_PREFIX = DOCS / "nlab"  # beside index.html: the page fetches the zips by basename
-SITE_URL = "https://stevenfazzio.github.io/nlab-map/"
+SITE_URL = "https://stevenfazzio.com/nlab-map/"  # project Pages site under the custom domain
 N_CONTEXTS = 20
 TIER_LABELS = {
     "idea": "Concept: Idea section",
