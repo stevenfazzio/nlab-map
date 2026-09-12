@@ -141,6 +141,12 @@ def clean(md):
     return t.strip()
 
 
+def strip_heading_lines(md):
+    """Drop sub-heading lines (e.g. "General", "Definition 2.1") so they do not lead the hovercard summary.
+    Applied to the summary only: embed_text must stay byte-identical to what was embedded."""
+    return re.sub(r"^\s*(?:#{1,6}|\\(?:sub)*section\{)[^\n]*$", "", md, flags=re.M).strip()
+
+
 def truncate_words(text, cap):
     words = text.split()
     return " ".join(words[:cap])
@@ -251,13 +257,13 @@ def main():
         stmt = next((s for h, s in secs if STMT_RE.match(h)), "")
         idea_c, defn_c, stmt_c, pre_c = clean(idea), clean(defn), clean(stmt), clean(preamble)
         if len(idea_c.split()) >= SECTION_MIN_WORDS:
-            tier, lead = "idea", idea_c
+            tier, lead, raw_lead = "idea", idea_c, idea
         elif len(defn_c.split()) >= SECTION_MIN_WORDS:
-            tier, lead = "definition", defn_c
+            tier, lead, raw_lead = "definition", defn_c, defn
         elif len(stmt_c.split()) >= SECTION_MIN_WORDS:
-            tier, lead = "statement", stmt_c
+            tier, lead, raw_lead = "statement", stmt_c, stmt
         elif len(pre_c.split()) >= PREAMBLE_MIN_WORDS:
-            tier, lead = "preamble", pre_c
+            tier, lead, raw_lead = "preamble", pre_c, preamble
         else:
             drops["no self-description (no Idea/Definition/Statement section or preamble)"] += 1
             continue
@@ -273,7 +279,7 @@ def main():
                 page_type=ptype,
                 tier=tier,
                 embed_text=embed_text,
-                summary=first_sentences(lead, SUMMARY_WORD_CAP),
+                summary=first_sentences(clean(strip_heading_lines(raw_lead)), SUMMARY_WORD_CAP),
                 context_primary=contexts[0] if contexts else "None",
                 context_all=";".join(contexts),
                 category_tags=cats,
