@@ -9,7 +9,7 @@ Surfaces:
   search      name + redirect names + summary + all Context headings
   click       opens the page on ncatlab.org
   size        log in-degree (how often other pages link here)
-  colormaps   page structure (tier), primary Context (top-N), last-revised year
+  colormaps   page structure (tier), primary Context (top-N), date last revised
 """
 
 import json
@@ -44,6 +44,11 @@ HOVER_TEMPLATE = """
 """
 
 
+def tidy_math(text):
+    """Context headings occasionally carry itex, e.g. "$(\\infty,1)$-Category theory"; render it as plain Unicode."""
+    return text.replace("\\infty", "∞").replace("$", "")
+
+
 def categorical_palette(n_colors):
     return glasbey.create_palette(
         palette_size=n_colors, colorblind_safe=True, cvd_severity=100.0, lightness_bounds=(25, 75)
@@ -75,11 +80,10 @@ def main():
 
     # --- point fields
     structure = np.where(corpus.page_type == "reference", "Reference page", corpus.tier.map(TIER_LABELS))
-    ctx = corpus.context_primary.copy()
+    ctx = corpus.context_primary.map(tidy_math)
     top_ctx = ctx[ctx != "None"].value_counts().head(N_CONTEXTS).index
     ctx_grouped = np.where(ctx.isin(top_ctx), ctx, np.where(ctx == "None", "No Context sidebar", "Other"))
     revised = corpus.last_revised.dt.strftime("%Y-%m-%d").fillna("unknown")
-    year = corpus.last_revised.dt.year.astype("float32").fillna(np.nan)
     extra = pd.DataFrame(
         {
             "summary": corpus.summary.fillna("").str.replace("<", "&lt;", regex=False),
@@ -95,7 +99,7 @@ def main():
                 + " | "
                 + corpus.summary.fillna("")
                 + " | "
-                + corpus.context_all.str.replace(";", " | ")
+                + corpus.context_all.map(tidy_math).str.replace(";", " | ")
             ),
         }
     )
@@ -110,6 +114,7 @@ def main():
             "description": description,
             "kind": "categorical",
             "colors": categorical_palette(len(cats)),
+            "show_legend": True,  # the client hides categorical legends with >20 colours unless told otherwise
         }
 
     rawdata, metadata = [], []
@@ -119,8 +124,8 @@ def main():
     ):
         rawdata.append(arr)
         metadata.append(meta)
-    rawdata.append(year.to_numpy())
-    metadata.append({"field": "revised", "description": "Year last revised", "kind": "continuous", "cmap": "viridis"})
+    rawdata.append(corpus.last_revised.to_numpy())  # datetime64; DataMapPlot renders date ticks on the legend
+    metadata.append({"field": "revised", "description": "Date last revised", "kind": "datetime", "cmap": "viridis"})
 
     DATA_PREFIX.parent.mkdir(parents=True, exist_ok=True)
     fig = create_interactive_plot(
