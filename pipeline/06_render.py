@@ -109,6 +109,16 @@ def load_label_layers(labels):
     return layers
 
 
+# Plausible analytics: the one site that covers all of stevenfazzio.com. The script
+# ignores localhost and file:// pages, so local previews stay out of the stats.
+PLAUSIBLE_SNIPPET = """<!-- Privacy-friendly analytics by Plausible -->
+<script async src="https://plausible.io/js/pa-dvmKWiL1gpqH63wOvMp-g.js"></script>
+<script>
+  window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};
+  plausible.init()
+</script>"""
+
+
 def main():
     corpus = pd.read_parquet(DATA / "corpus.parquet")
     coords = pd.read_parquet(DATA / "coords.parquet")
@@ -207,7 +217,7 @@ def main():
             "og:url": SITE_URL,
         }.items()
     )
-    html = re.sub(r"<head>", "<head>\n" + og, html, count=1)
+    html = html.replace("<head>", "<head>\n" + og + "\n" + PLAUSIBLE_SNIPPET, 1)
     OUT_HTML.write_text(html)
     sizes = {p.name: p.stat().st_size for p in sorted(DOCS.glob("**/*")) if p.is_file()}
     print("output sizes (bytes):")
